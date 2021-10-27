@@ -210,6 +210,7 @@ _nasm=auto
 _optimization_level=
 _default_optimization_level=-O2
 _nuked_opl=yes
+_enable_lto=no
 # Default commands
 _ranlib=ranlib
 _strip=strip
@@ -220,7 +221,7 @@ _windres=windres
 _stagingpath="staging"
 _win32path="c:/scummvm"
 _amigaospath="Games:ScummVM"
-_morphospath="PROGDIR:"
+_amigaospath="PROGDIR:"
 _staticlibpath=
 _xcodetoolspath=
 _sparklepath=
@@ -1028,7 +1029,7 @@ Optional Features:
                            optimizations)
   --enable-release-mode    enable building in release mode (without optimizations)
   --enable-optimizations   enable optimizations
-  --enable-asan            enable Address Sanitizer for memory-related debugging
+  --enable-lto             enable Link Time Optimization
   --enable-tsan            enable Thread Sanitizer for thread-related debugging
   --enable-profiling       enable profiling
   --enable-plugins         enable the support for dynamic plugins
@@ -1475,6 +1476,9 @@ for ac_option in $@; do
 	--disable-optimizations)
 		_optimizations=no
 		;;
+	--enable-lto)
+		_enable_lto=yes
+		;;
 	--enable-profiling)
 		_enable_prof=yes
 		;;
@@ -1574,6 +1578,10 @@ for ac_option in $@; do
 			engine_disable ${engine_name}
 		done
 		;;
+	--with-amiga-prefix=*)
+		arg=`echo $ac_option | cut -d '=' -f 2`
+			_amigaospath="$arg"
+			;;
 	*)
 		option_error
 		;;
@@ -1714,6 +1722,11 @@ ios7)
 	_host_os=iphone
 	_host_cpu=arm
 	_host_alias=arm-apple-darwin11
+	;;
+m68k-amigaos | m68k-unknown-amigaos | m68k-aros | amigaos3)
+	_host_os=amigaos3
+	_host_cpu=m68k
+	_host_alias=m68k-amigaos
 	;;
 maemo)
 	_host_os=maemo
@@ -2297,6 +2310,7 @@ if test "$_debug_build" != no; then
 	debug_mode=-g
 	test "$_host_os" = amigaos && debug_mode=-gstabs
 	append_var CXXFLAGS "$debug_mode"
+	append_var LDFLAGS "$debug_mode"
 	echo_n -- "$debug_mode"
 
 	echo "int main() { return 0; }" > $TMPC
@@ -2322,7 +2336,7 @@ fi
 if test "$_release_build" = yes; then
 	# Add a define, which indicates we are doing
 	# an build for a release version.
-	append_var DEFINES "-DRELEASE_BUILD"
+	append_var DEFINES "-DRELEASE_BUILD -DNDEBUG"
 fi
 
 # By default, we add -pedantic to the CXXFLAGS to catch some potentially
@@ -2542,7 +2556,7 @@ test $TMPR -eq 0 || exit 1	# check exit code of subshell
 # for the smaller sizes.
 echo_n "Alignment required... "
 case $_host_cpu in
-	i[3-6]86 | amd64 | x86_64 | powerpc* | ppc*)
+	i[3-6]86 | amd64 | x86_64 | powerpc* | ppc* | m68k)
 		# Unaligned access should work
 		_need_memalign=no
 		;;
@@ -2635,6 +2649,10 @@ case $_host_os in
 		append_var LDFLAGS "-L$DEVKITPRO/portlibs/3ds/lib"
 		append_var LDFLAGS "-specs=3dsx.specs -lctru"
 		append_var LIBS "-lcitro3d"
+		;;
+	m68k-amigaos | m68k-unknown-amigaos | m68k-aros | amigaos3)
+		append_var DEFINES "-DFORBIDDEN_SYMBOL_ALLOW_ALL -DSTDCALL=__stdargs -DHAVE_CONFIG_H"
+		add_line_to_config_mk 'AMIGAOS3 = 1'
 		;;
 	amigaos*)
 		append_var LDFLAGS "-Wl,--export-dynamic"
@@ -3396,6 +3414,54 @@ if test -n "$_host"; then
 			_seq_midi=no
 			_timidity=no
 			;;
+		m68k-amigaos | m68k-unknown-amigaos | m68k-aros | amigaos3)
+			append_var DEFINES "-D__amigaos3__"
+			append_var DEFINES "-DREDUCE_MEMORY_USAGE"
+			append_var DEFINES "-DDISABLE_FANCY_THEMES"
+			append_var DEFINES "-DGUI_ONLY_FULLSCREEN"
+			append_var DEFINES "-DREGPARM=__attribute__\(\(regparm\(3\)\)\)"
+			#append_var DEFINES "-DREGPARM=__regargs"
+#			append_var CXXFLAGS "-fdebug-prefix-map=$_srcdir=source"
+
+			# don't need thread safety for some static objects, no need to link pthread
+			_machine_flags="-noixemul -m68020-60 -mtune=68030 -fno-threadsafe-statics"
+			if test "$_enable_lto" != no; then
+				append_var _machine_flags "-flto"
+			fi
+			append_var CXXFLAGS "$_machine_flags"
+			append_var LDFLAGS  "$_machine_flags"
+
+			# try producing smaller,faster executable  -fno-rtti -fshort-enums -fstack-reuse=all
+			append_var CXXFLAGS "-fno-exceptions"
+			if test "$_debug_build" != yes; then
+				# no logging, warning etc...
+				append_var DEFINES "-DDISABLE_TEXT_CONSOLE"
+				append_var CXXFLAGS "-fstrict-aliasing"
+				# in release mode without profiling, disable frame pointer
+				if test "$_enable_prof" != yes; then
+					append_var CXXFLAGS "-fomit-frame-pointer"
+				fi
+			fi
+			# in general, profiling requires frame pointer
+			if test "$_enable_prof" = yes; then
+				append_var CXXFLAGS "-fno-omit-frame-pointer"
+			fi
+
+			_backend="amigaos3"
+			_build_scalers=no
+			_seq_midi=no
+			_timidity=no
+			_mt32emu=no
+			_alsa=no
+			_bink=no
+			_updates=no
+			# Use -O3 on the Amiga for optimized builds.
+			if test "$_optimizations" = yes; then
+				_optimization_level="-Ofast"
+			else
+				append_var CXXFLAGS "-Og"
+			fi
+			;;
 		m68k-atari-mint)
 			_seq_midi=no
 			_timidity=no
@@ -3639,6 +3705,8 @@ case $_backend in
 			append_var CFLAGS "-isysroot $SDKROOT -F$SDKROOT/System/Library/Frameworks"
 			append_var CXXFLAGS "-isysroot $SDKROOT -I$SDKROOT/usr/include/c++/4.2.1 -F$SDKROOT/System/Library/Frameworks"
 		fi
+		;;
+	amigaos3)
 		;;
 	maemo)
 		append_var DEFINES "-DMAEMO"
@@ -3980,6 +4048,15 @@ if test "$_optimizations" = yes ; then
 	append_var CXXFLAGS "-Wuninitialized"
 fi
 
+#
+# With Link Time Optimization, provide the same flags to the linker
+# I wish, I could be more specific here, but better safe than sorry.
+#
+case "${CXXFLAGS}" in
+	*"-flto"*)
+	append_var LDFLAGS ${CXXFLAGS}
+	;;
+esac
 #
 # Check whether plugin support is requested and possible
 #

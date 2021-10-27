@@ -76,9 +76,25 @@ else
 MODULE_LIB-$(MODULE) := $(MODULE)/lib$(notdir $(MODULE)).a
 
 # If not building as a plugin, add the object files to the main OBJS list
-OBJS += $(MODULE_LIB-$(MODULE))
+ifdef AMIGAOS3
+	ifneq ($(filter -flto%,$(CXXFLAGS)),)
+		# in order to use Linktime optimization, do not build larger .a files,
+		# but instead link against the individual .o files
+		OBJS += $(MODULE_OBJS-$(MODULE))
+	else
+		OBJS += $(MODULE_LIB-$(MODULE))
+	endif
+else
+	OBJS += $(MODULE_LIB-$(MODULE))
+endif
 
 # Convenience library target
+ifdef AMIGAOS3
+#filter out -flto for the .a targets
+$(MODULE_LIB-$(MODULE)): CXXFLAGS := $(filter-out -flto%,$(CXXFLAGS))
+$(MODULE_LIB-$(MODULE)): LDFLAGS := $(filter-out -flto%,$(LDFLAGS))
+endif
+
 $(MODULE_LIB-$(MODULE)): $(MODULE_OBJS-$(MODULE))
 	$(QUIET)-$(RM) $@
 	$(QUIET_AR)$(AR) $@ $+

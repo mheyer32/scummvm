@@ -1,3 +1,45 @@
+# ScummVM 2.2.0 AmigaOS 3 Port
+
+The basis for this ScummVM port for classic Amigas is a ScummVM 1.8.1 port obtained form:
+https://github.com/mntmn/scummvm-amigaos3
+
+I imported this Amiga port and replanted it ontop of the official 1.8.1 ScummVM branch.
+Later, ScummVM 2.0 was merged into it.
+
+This port re-enables the original AGA port, but replaces the chunky-to-planar routines (no source was available) with WriteChunkyPixels. You NEED to install BlazeWCP to get any decent speed out of it.
+Midi playback via CAMD was added, too - enjoy nice MT32 music on your Amiga! A nice side effect of Midi playback (in games that support it) is that it has super low tax on the CPU and it sounds superior.
+The original Music/SoundFX output via AHI is still in place. But it is seriously slow, which is most likely a flaw in how ScummVM is managing
+sound playback - lots of room for improvement.
+
+## How to build
+
+This source will build with Stefan 'Bebbo' Franke's GCC 6.5.0b toolchain at: https://github.com/bebbo/amiga-gcc
+
+The binary directory of the toolchain is expected to be in the search path.
+
+1) Configure
+`./configure --host=m68k-amigaos --disable-all-engines --disable-hq-scalers --enable-c++11 --disable-lua --disable-nuked-opl --disable-mt32emu --enable-release --enable-optimizations --with-amiga-prefix=/media/sf_Amiga/ScummVM --enable-engine=sci,scumm,tinsel`
+
+This only enables the SCUMM based engines. Other engines like SCI and Tinsel can be added but will increase the binary size.
+`--with-amiga-prefix=/media/sf_Amiga/ScummVM`  points to a directory shared with the Amiga (or Amiga Emulator)
+All required binaries will be installed there along with a stripped version of the executable
+
+Some engine code makes use of dynamic_cast<>, which requires RTTI to be available. Edit the 'configure' script and find the
+amigaos3 relevant section and disable the line
+`append_var CXXFLAGS "-fno-rtti"`
+there.
+
+The settings for the AmigaOS compilation enable Link Time Optimization (LTO). This allows the linker to perform certain optimizations and shrinks the resulting executable a bit in size.
+However, it makes the linking process very slow, leading to long turnaround times during debugging.
+In order to disable LTO, find this line in the 'configure' script:
+`_machine_flags="-noixemul -m68030 -flto -fno-threadsafe-statics"`
+and remove `-flto`
+
+2) Run
+make amigaos3dist -j8
+
+Will build in 8 threads and put the resulting binaries where '--with-amiga-prefix' pointed to.
+
 # [ScummVM README](https://www.scummvm.org/) · [![Build Status](https://travis-ci.org/scummvm/scummvm.svg?branch=master)](https://travis-ci.org/scummvm/scummvm) ![CI](https://github.com/scummvm/scummvm/workflows/CI/badge.svg) [![Translation status](https://translations.scummvm.org/widgets/scummvm/-/scummvm/svg-badge.svg)](https://translations.scummvm.org/engage/scummvm/?utm_source=widget) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md#pull-requests) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/200a9bd3f7a647b48415efb484cc8bdc)](https://www.codacy.com/app/sev-/scummvm?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=scummvm/scummvm&amp;utm_campaign=Badge_Grade)
 
 For more information, compatibility lists, details on donating, the
