@@ -183,10 +183,14 @@ public:
 
 	template <class T>
 	T &get() const {
+#ifndef __amigaos3__
 		T *pluginObject = dynamic_cast<T *>(_pluginObject);
 		if (!pluginObject) {
 			error("Invalid cast of plugin %s", getName());
 		}
+#else
+	T *pluginObject = static_cast<T *>(_pluginObject);
+#endif
 		return *pluginObject;
 	}
 

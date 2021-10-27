@@ -25,7 +25,7 @@
 
 #include "common/scummsys.h"
 
-#if defined(__amigaos4__) || defined(__amigaos3__)
+#if defined(__amigaos3__)
 
 #include "audio/mpu401.h"
 #include "audio/musicplugin.h"
